@@ -1082,20 +1082,28 @@ async function submitOrder() {
 //   2x Some Card Name
 function parseProxxiedDecklist(text) {
   if (!text.trim()) return [];
-  return text.split('\n')
-    .map(line => line.trim())
-    .filter(line => line.length > 0)
-    .map(line => {
-      // strip leading quantity: 1x, 2x, 1X, etc.
-      let name = line.replace(/^\d+[xX]\s+/, '');
-      // strip set code in parens: (sld) 1291  or  (inr) 482
-      name = name.replace(/\s*\([a-zA-Z0-9]+\)\s*\d*/g, '');
-      // strip MPC art ID in brackets: [mpc:XXXXX]
-      name = name.replace(/\s*\[mpc:[^\]]+\]/gi, '');
-      // strip any trailing/leading whitespace
-      return name.trim();
-    })
-    .filter(name => name.length > 0);
+  const cards = [];
+  text.split('\n').forEach(line => {
+    line = line.trim();
+    if (!line) return;
+
+    // extract quantity from the start: 2x, 2X, 2 — default to 1
+    const qtyMatch = line.match(/^(\d+)[xX]?\s+/);
+    const qty = qtyMatch ? parseInt(qtyMatch[1]) : 1;
+
+    // strip leading quantity
+    let name = line.replace(/^\d+[xX]?\s+/, '');
+    // strip set code in parens + trailing number: (sld) 1291
+    name = name.replace(/\s*\([a-zA-Z0-9]+\)\s*\d*/g, '');
+    // strip MPC art ID in brackets: [mpc:XXXXX]
+    name = name.replace(/\s*\[mpc:[^\]]+\]/gi, '');
+    name = name.trim();
+
+    if (!name) return;
+    // push one entry per copy
+    for (let i = 0; i < qty; i++) cards.push(name);
+  });
+  return cards;
 }
 
 function previewProxxiedParse() {
