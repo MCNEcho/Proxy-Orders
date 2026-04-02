@@ -1011,6 +1011,15 @@ function buildReview() {
     ${document.getElementById('custNotes').value ? `<div class="review-row"><div class="rl">Notes</div><div class="rv">${document.getElementById('custNotes').value}</div></div>` : ''}`;
 }
 
+// Groups duplicate card names and formats as "2x Card Name" per line
+function formatCardList(cards) {
+  const counts = {};
+  cards.forEach(c => counts[c] = (counts[c] || 0) + 1);
+  return Object.entries(counts)
+    .map(([name, qty]) => qty > 1 ? `${qty}x ${name}` : `1x ${name}`)
+    .join(' | ');
+}
+
 // ---- Submit ----
 async function submitOrder() {
   const btn = document.getElementById('btnSubmit');
@@ -1036,10 +1045,10 @@ async function submitOrder() {
     customer_notes:  document.getElementById('custNotes').value || '(none)',
     source_type:     sourceDetail,
     raw_decklist:    state.source === 'proxxied' ? document.getElementById('proxxiedDecklist').value : '(not a Proxxied order)',
-    regular_cards:   r > 0 ? state.regularCards.join('\n') : '(none)',
+    regular_cards:   r > 0 ? formatCardList(state.regularCards) : '(none)',
     regular_count:   r,
     regular_billed:  rBilled,
-    holo_cards:      h > 0 ? state.holoCards.join('\n') : '(none)',
+    holo_cards:      h > 0 ? formatCardList(state.holoCards) : '(none)',
     holo_count:      h,
     holo_billed:     hBilled,
     order_total:     '$' + grand,
@@ -1075,14 +1084,15 @@ function parseProxxiedDecklist(text) {
 
     // strip leading quantity
     let name = line.replace(/^\d+[xX]?\s+/, '');
-    // strip set code in parens + trailing number: (sld) 1291
-    name = name.replace(/\s*\([a-zA-Z0-9]+\)\s*\d*/g, '');
+    // strip set code in parens + trailing alphanumeric number: (sld) 1012a  or  (inr) 482
+    name = name.replace(/\s*\([a-zA-Z0-9]+\)\s*[0-9]+[a-zA-Z]*/g, '');
     // strip MPC art ID in brackets: [mpc:XXXXX]
     name = name.replace(/\s*\[mpc:[^\]]+\]/gi, '');
+    // fix Proxxied apostrophe substitution: _s → 's
+    name = name.replace(/_s\b/g, "'s");
     name = name.trim();
 
     if (!name) return;
-    // push one entry per copy
     for (let i = 0; i < qty; i++) cards.push(name);
   });
   return cards;
