@@ -781,9 +781,11 @@ function renderSteps() {
 }
 
 function goTo(n) {
-  if (n === 2 && !validateStep1()) return;
-  if (n === 3 && !validateStep2()) return;
-  if (n === 4 && !validateStep3()) return;
+  if (n > state.step) {
+    if (n === 2 && !validateStep1()) return;
+    if (n === 3 && !validateStep2()) return;
+    if (n === 4 && !validateStep3()) return;
+  }
   if (n === 4) buildReview();
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
   document.getElementById('panel-' + n).classList.add('active');
@@ -1002,7 +1004,7 @@ function buildReview() {
   // Source block
   const srcMap = { proxxied: 'Proxxied.com', cardsmith: 'MTG Cardsmith', custom: 'Custom Artwork' };
   let srcHtml = `<div class="review-row"><div class="rl">Type</div><div class="rv">${srcMap[state.source]}</div></div>`;
-  if (state.source === 'proxxied') srcHtml += `<div class="review-row"><div class="rl">Link</div><div class="rv" style="word-break:break-all">${document.getElementById('proxxiedLink').value}</div></div>`;
+  if (state.source === 'proxxied') srcHtml += `<div class="review-row"><div class="rl">Decklist</div><div class="rv">${r + h} card${(r+h)!==1?'s':''} parsed from pasted decklist</div></div>`;
   if (state.source === 'cardsmith') srcHtml += `<div class="review-row"><div class="rl">Link</div><div class="rv" style="word-break:break-all">${document.getElementById('cardsmithLink').value}</div></div>`;
   if (state.source === 'custom') srcHtml += `<div class="review-row"><div class="rl">Files</div><div class="rv">${state.customFiles.length} image${state.customFiles.length!==1?'s':''} uploaded</div></div>`;
   document.getElementById('reviewSource').innerHTML = srcHtml;
