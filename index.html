@@ -1,0 +1,1071 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Proxxied — Order Custom Cards</title>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Raleway:wght@300;400;500;600&display=swap" rel="stylesheet">
+
+<!-- ============================================================
+  CONFIG — edit these values to change prices and contact info
+  ============================================================ -->
+<script>
+const CONFIG = {
+  REGULAR_PRICE: 1.50,   // $ per card (regular finish)
+  HOLO_PRICE:    2.00,   // $ per card (holographic finish)
+  MIN_CARDS:     8,      // minimum total cards per order
+  YOUR_EMAIL:    "you@example.com",  // your email address
+  EMAILJS_PUBLIC_KEY:  "YOUR_PUBLIC_KEY",
+  EMAILJS_SERVICE_ID:  "YOUR_SERVICE_ID",
+  EMAILJS_TEMPLATE_ID: "YOUR_TEMPLATE_ID",
+};
+</script>
+<!-- ============================================================ -->
+
+<style>
+:root {
+  --bg:        #0d0d0f;
+  --surface:   #13131a;
+  --surface2:  #1a1a25;
+  --border:    rgba(255,255,255,0.08);
+  --border2:   rgba(255,255,255,0.15);
+  --gold:      #c9a84c;
+  --gold-dim:  #9a7a34;
+  --gold-glow: rgba(201,168,76,0.18);
+  --holo:      #7b6cf6;
+  --holo-dim:  #5a50c4;
+  --holo-glow: rgba(123,108,246,0.18);
+  --text:      #e8e4d8;
+  --muted:     #7a7670;
+  --danger:    #c94c4c;
+  --danger-bg: rgba(201,76,76,0.12);
+  --success:   #4caf7d;
+  --radius:    12px;
+  --radius-lg: 18px;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: 'Raleway', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+/* background grain texture */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.6;
+}
+
+/* shimmer line across top */
+body::after {
+  content: '';
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--gold), transparent);
+  z-index: 100;
+}
+
+.page { position: relative; z-index: 1; max-width: 780px; margin: 0 auto; padding: 3rem 1.5rem 6rem; }
+
+/* ---- HEADER ---- */
+header { text-align: center; margin-bottom: 3.5rem; }
+header .eyebrow {
+  font-family: 'Raleway', sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.25em;
+  text-transform: uppercase;
+  color: var(--gold);
+  margin-bottom: 0.75rem;
+}
+header h1 {
+  font-family: 'Cinzel', serif;
+  font-size: clamp(2rem, 6vw, 3.2rem);
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: 0.04em;
+  line-height: 1.1;
+  margin-bottom: 0.75rem;
+}
+header h1 span { color: var(--gold); }
+header p {
+  font-size: 14px;
+  color: var(--muted);
+  max-width: 420px;
+  margin: 0 auto;
+}
+
+/* ---- STEP INDICATOR ---- */
+.steps-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  margin-bottom: 2.5rem;
+  position: relative;
+}
+.step-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  position: relative;
+  z-index: 1;
+}
+.step-item + .step-item::before {
+  content: '';
+  position: absolute;
+  top: 16px;
+  right: 50%;
+  width: 60px;
+  height: 1px;
+  background: var(--border2);
+  transform: translateX(-100%);
+  z-index: 0;
+}
+.step-dot {
+  width: 32px; height: 32px;
+  border-radius: 50%;
+  border: 1px solid var(--border2);
+  background: var(--surface);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  transition: all 0.3s;
+  font-family: 'Cinzel', serif;
+}
+.step-dot.active { border-color: var(--gold); color: var(--gold); box-shadow: 0 0 12px var(--gold-glow); }
+.step-dot.done { border-color: var(--success); background: rgba(76,175,125,0.15); color: var(--success); }
+.step-label { font-size: 10px; color: var(--muted); letter-spacing: 0.08em; text-transform: uppercase; white-space: nowrap; }
+.step-label.active { color: var(--gold); }
+.steps-connector {
+  height: 1px;
+  flex: 1;
+  background: var(--border2);
+  max-width: 60px;
+}
+
+/* ---- PANELS ---- */
+.panel { display: none; animation: fadeUp 0.35s ease; }
+.panel.active { display: block; }
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.panel-title {
+  font-family: 'Cinzel', serif;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 0.35rem;
+}
+.panel-sub { font-size: 13px; color: var(--muted); margin-bottom: 1.5rem; }
+
+/* ---- CARDS (source selection) ---- */
+.source-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-bottom: 1.5rem; }
+.source-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 1.5rem 1.25rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+}
+.source-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+.source-card:hover { border-color: var(--border2); transform: translateY(-2px); }
+.source-card.selected { border-color: var(--gold); box-shadow: 0 0 20px var(--gold-glow); }
+.source-card.selected::before { background: var(--gold-glow); opacity: 1; }
+.source-icon { font-size: 28px; margin-bottom: 0.75rem; }
+.source-name { font-family: 'Cinzel', serif; font-size: 14px; font-weight: 600; color: var(--text); margin-bottom: 0.4rem; }
+.source-desc { font-size: 12px; color: var(--muted); line-height: 1.5; }
+
+/* ---- FORM ELEMENTS ---- */
+.field { margin-bottom: 1.25rem; }
+.field label { display: block; font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin-bottom: 0.5rem; }
+.field input[type=text], .field input[type=email], .field textarea {
+  width: 100%;
+  background: var(--surface);
+  border: 1px solid var(--border2);
+  border-radius: var(--radius);
+  padding: 0.75rem 1rem;
+  color: var(--text);
+  font-family: 'Raleway', sans-serif;
+  font-size: 14px;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.field input:focus, .field textarea:focus {
+  outline: none;
+  border-color: var(--gold-dim);
+  box-shadow: 0 0 0 3px var(--gold-glow);
+}
+.field textarea { resize: vertical; min-height: 80px; }
+::placeholder { color: var(--muted); opacity: 0.6; }
+
+/* ---- EXTERNAL LINK BLOCK ---- */
+.ext-block {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 1.25rem;
+  margin-bottom: 1.25rem;
+}
+.ext-block p { font-size: 13px; color: var(--muted); margin-bottom: 0.75rem; }
+.btn-ext {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--surface2);
+  border: 1px solid var(--border2);
+  border-radius: var(--radius);
+  padding: 0.6rem 1.1rem;
+  color: var(--gold);
+  font-family: 'Raleway', sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: none;
+  transition: all 0.2s;
+  margin-bottom: 1rem;
+}
+.btn-ext:hover { background: var(--gold-glow); border-color: var(--gold-dim); }
+.btn-ext svg { width: 14px; height: 14px; }
+
+/* ---- FILE UPLOAD ---- */
+.upload-zone {
+  border: 2px dashed var(--border2);
+  border-radius: var(--radius-lg);
+  padding: 2.5rem 1.5rem;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  background: var(--surface);
+  margin-bottom: 1rem;
+}
+.upload-zone:hover, .upload-zone.drag-over { border-color: var(--gold-dim); background: var(--gold-glow); }
+.upload-icon { font-size: 32px; margin-bottom: 0.75rem; }
+.upload-zone p { font-size: 13px; color: var(--muted); }
+.upload-zone strong { color: var(--gold); }
+#fileInput { display: none; }
+
+.file-list { display: flex; flex-direction: column; gap: 6px; margin-top: 0.75rem; }
+.file-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 13px;
+}
+.file-chip .fname { flex: 1; color: var(--text); }
+.file-chip .cardname { color: var(--gold); font-weight: 500; }
+.file-chip .remove { cursor: pointer; color: var(--muted); font-size: 16px; line-height: 1; padding: 0 2px; }
+.file-chip .remove:hover { color: var(--danger); }
+
+/* ---- PILE BUILDER ---- */
+.piles-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 1.25rem; }
+@media (max-width: 540px) { .piles-grid { grid-template-columns: 1fr; } }
+
+.pile {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 1rem;
+  min-height: 200px;
+  display: flex;
+  flex-direction: column;
+}
+.pile-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 0.75rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--border);
+}
+.pile-icon { font-size: 18px; }
+.pile-name { font-family: 'Cinzel', serif; font-size: 13px; font-weight: 600; }
+.pile-name.regular { color: var(--gold); }
+.pile-name.holo { color: var(--holo); }
+.pile-count { margin-left: auto; font-size: 11px; color: var(--muted); background: var(--surface2); border-radius: 20px; padding: 2px 8px; }
+
+.pile-cards { flex: 1; display: flex; flex-direction: column; gap: 6px; }
+.pile-card-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 7px 10px;
+  font-size: 13px;
+  cursor: grab;
+  transition: all 0.15s;
+  user-select: none;
+}
+.pile-card-item:hover { border-color: var(--border2); }
+.pile-card-item.dragging { opacity: 0.4; }
+.pile-card-item .card-label { flex: 1; color: var(--text); }
+.pile-card-item .move-btn {
+  font-size: 11px;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  white-space: nowrap;
+  transition: all 0.15s;
+}
+.pile-card-item .move-btn:hover { color: var(--text); border-color: var(--border2); }
+.pile-card-item .del-btn { color: var(--muted); cursor: pointer; font-size: 15px; line-height: 1; }
+.pile-card-item .del-btn:hover { color: var(--danger); }
+
+.pile-empty { font-size: 12px; color: var(--muted); text-align: center; margin: auto; opacity: 0.6; font-style: italic; }
+
+/* add card input row */
+.add-card-row { display: flex; gap: 8px; margin-top: 0.75rem; }
+.add-card-row input {
+  flex: 1;
+  background: var(--surface2);
+  border: 1px solid var(--border2);
+  border-radius: 8px;
+  padding: 7px 10px;
+  color: var(--text);
+  font-family: 'Raleway', sans-serif;
+  font-size: 13px;
+}
+.add-card-row input:focus { outline: none; border-color: var(--gold-dim); }
+.add-card-row button {
+  background: var(--surface2);
+  border: 1px solid var(--border2);
+  border-radius: 8px;
+  padding: 7px 12px;
+  color: var(--gold);
+  cursor: pointer;
+  font-size: 16px;
+  transition: all 0.15s;
+}
+.add-card-row button:hover { background: var(--gold-glow); }
+
+/* ---- PRICING DISPLAY ---- */
+.price-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 6px;
+}
+.price-tag .amount { font-weight: 600; color: var(--gold); }
+.price-tag.holo .amount { color: var(--holo); }
+
+/* ---- BUTTONS ---- */
+.btn-row { display: flex; gap: 10px; margin-top: 2rem; }
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0.75rem 1.75rem;
+  border-radius: var(--radius);
+  font-family: 'Raleway', sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  transition: all 0.2s;
+  letter-spacing: 0.03em;
+}
+.btn-primary {
+  background: var(--gold);
+  color: #0d0d0f;
+}
+.btn-primary:hover { background: #d4b060; transform: translateY(-1px); box-shadow: 0 4px 16px var(--gold-glow); }
+.btn-primary:disabled { opacity: 0.4; cursor: not-allowed; transform: none; box-shadow: none; }
+.btn-secondary {
+  background: var(--surface);
+  color: var(--muted);
+  border: 1px solid var(--border2);
+}
+.btn-secondary:hover { color: var(--text); border-color: var(--border2); background: var(--surface2); }
+
+/* ---- LIVE TOTALS BAR ---- */
+.totals-bar {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 1rem 1.25rem;
+  display: flex;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-bottom: 1.5rem;
+}
+.total-item { display: flex; flex-direction: column; gap: 2px; }
+.total-item .tl { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.07em; }
+.total-item .tv { font-size: 18px; font-weight: 600; color: var(--text); }
+.total-item .tv.gold { color: var(--gold); }
+.total-item .tv.holo { color: var(--holo); }
+.total-item .tv.grand { font-size: 22px; font-family: 'Cinzel', serif; color: var(--gold); }
+
+/* ---- REVIEW SCREEN ---- */
+.review-block {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 1.25rem;
+  margin-bottom: 1rem;
+}
+.review-block h3 {
+  font-family: 'Cinzel', serif;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  margin-bottom: 0.75rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--border);
+}
+.review-row { display: flex; justify-content: space-between; font-size: 13px; padding: 4px 0; }
+.review-row .rl { color: var(--muted); }
+.review-row .rv { color: var(--text); font-weight: 500; text-align: right; max-width: 60%; }
+
+.warning-box {
+  background: var(--danger-bg);
+  border: 1px solid var(--danger);
+  border-radius: var(--radius);
+  padding: 1rem 1.25rem;
+  margin-bottom: 1rem;
+  font-size: 13px;
+  color: #e88;
+  line-height: 1.6;
+}
+.warning-box strong { color: var(--danger); display: block; margin-bottom: 0.4rem; font-size: 14px; }
+.warning-item { margin-bottom: 0.25rem; }
+
+.review-total {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 1.25rem;
+  background: var(--surface2);
+  border: 1px solid var(--border2);
+  border-radius: var(--radius-lg);
+  margin-bottom: 1rem;
+}
+.review-total .label { font-family: 'Cinzel', serif; font-size: 15px; color: var(--muted); }
+.review-total .amount { font-family: 'Cinzel', serif; font-size: 26px; color: var(--gold); }
+
+.card-list-preview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 0.5rem;
+}
+.card-pill {
+  font-size: 12px;
+  padding: 3px 10px;
+  border-radius: 20px;
+  border: 1px solid var(--border2);
+  background: var(--surface2);
+  color: var(--text);
+}
+.card-pill.holo { border-color: var(--holo-dim); background: var(--holo-glow); color: #b8b0ff; }
+
+/* ---- SUCCESS ---- */
+.success-screen {
+  text-align: center;
+  padding: 3rem 1rem;
+}
+.success-icon { font-size: 56px; margin-bottom: 1rem; }
+.success-screen h2 { font-family: 'Cinzel', serif; font-size: 24px; color: var(--gold); margin-bottom: 0.75rem; }
+.success-screen p { font-size: 14px; color: var(--muted); max-width: 380px; margin: 0 auto 2rem; }
+
+/* ---- DIVIDER ---- */
+.divider { border: none; border-top: 1px solid var(--border); margin: 1.5rem 0; }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <header>
+    <div class="eyebrow">Custom MTG Proxies</div>
+    <h1>Place Your <span>Order</span></h1>
+    <p>High quality proxy cards printed on demand. Holographic and standard finishes available.</p>
+  </header>
+
+  <!-- Step indicator -->
+  <div class="steps-bar" id="stepsBar"></div>
+
+  <!-- ======== STEP 1: Card Source ======== -->
+  <div class="panel active" id="panel-1">
+    <div class="panel-title">Where are your cards from?</div>
+    <div class="panel-sub">Choose how you're bringing your card list.</div>
+
+    <div class="source-grid">
+      <div class="source-card" data-source="proxxied" onclick="selectSource(this)">
+        <div class="source-icon">🃏</div>
+        <div class="source-name">Proxxied.com</div>
+        <div class="source-desc">Build your list on Proxxied and paste your share link here.</div>
+      </div>
+      <div class="source-card" data-source="cardsmith" onclick="selectSource(this)">
+        <div class="source-icon">⚒️</div>
+        <div class="source-name">MTG Cardsmith</div>
+        <div class="source-desc">Design a custom card on MTG Cardsmith and paste your link.</div>
+      </div>
+      <div class="source-card" data-source="custom" onclick="selectSource(this)">
+        <div class="source-icon">🖼️</div>
+        <div class="source-name">Custom Artwork</div>
+        <div class="source-desc">Upload images named after the card you want. We'll handle the rest.</div>
+      </div>
+    </div>
+
+    <!-- Proxxied fields -->
+    <div id="src-proxxied" style="display:none">
+      <div class="ext-block">
+        <p>Open Proxxied, build your card list, then copy your share link and paste it below.</p>
+        <a class="btn-ext" href="https://proxxied.com" target="_blank">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+          Open Proxxied.com
+        </a>
+        <div class="field">
+          <label>Proxxied Share Link</label>
+          <input type="text" id="proxxiedLink" placeholder="https://proxxied.com/share/...">
+        </div>
+      </div>
+    </div>
+
+    <!-- Cardsmith fields -->
+    <div id="src-cardsmith" style="display:none">
+      <div class="ext-block">
+        <p>Design your card on MTG Cardsmith, then copy your card link and paste it below.</p>
+        <a class="btn-ext" href="http://mtgcardsmith.com/" target="_blank">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+          Open MTG Cardsmith
+        </a>
+        <div class="field">
+          <label>MTG Cardsmith Card Link</label>
+          <input type="text" id="cardsmithLink" placeholder="https://mtgcardsmith.com/view/...">
+        </div>
+      </div>
+    </div>
+
+    <!-- Custom artwork fields -->
+    <div id="src-custom" style="display:none">
+      <div class="ext-block">
+        <p>Name each image file after the card you want printed (e.g. <strong style="color:var(--gold)">Black Lotus.png</strong>). Upload as many as you like.</p>
+        <div class="upload-zone" id="uploadZone" onclick="document.getElementById('fileInput').click()">
+          <div class="upload-icon">📂</div>
+          <p><strong>Click to upload</strong> or drag & drop your images here</p>
+          <p style="margin-top:6px;font-size:11px;">Filename = card name &nbsp;·&nbsp; PNG, JPG, WEBP accepted</p>
+        </div>
+        <input type="file" id="fileInput" multiple accept="image/*" onchange="handleFiles(this.files)">
+        <div class="file-list" id="fileList"></div>
+      </div>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn btn-primary" onclick="goTo(2)" id="btn1">Continue →</button>
+    </div>
+  </div>
+
+  <!-- ======== STEP 2: Build Piles ======== -->
+  <div class="panel" id="panel-2">
+    <div class="panel-title">Sort your cards</div>
+    <div class="panel-sub">Add cards to each pile. Move them between finishes using the button on each card.</div>
+
+    <div class="totals-bar" id="liveTotals">
+      <div class="total-item"><div class="tl">Regular</div><div class="tv gold" id="ltReg">0 cards</div></div>
+      <div class="total-item"><div class="tl">Holographic</div><div class="tv holo" id="ltHolo">0 cards</div></div>
+      <div class="total-item"><div class="tl">Total cards</div><div class="tv" id="ltTotal">0</div></div>
+      <div class="total-item" style="margin-left:auto"><div class="tl">Est. total</div><div class="tv grand" id="ltGrand">$0.00</div></div>
+    </div>
+
+    <div class="piles-grid">
+      <!-- Regular pile -->
+      <div class="pile">
+        <div class="pile-header">
+          <span class="pile-icon">🃏</span>
+          <span class="pile-name regular">Regular</span>
+          <span class="pile-count" id="regCount">0</span>
+        </div>
+        <div class="pile-cards" id="regularPile"></div>
+        <div class="pile-empty" id="regularEmpty">No cards yet</div>
+        <div class="price-tag"><span class="amount">$<span id="priceRegLabel"></span></span> per card</div>
+        <div class="add-card-row" id="addRegRow">
+          <input type="text" id="addRegInput" placeholder="Card name…" onkeydown="if(event.key==='Enter')addCard('regular')">
+          <button onclick="addCard('regular')">+</button>
+        </div>
+      </div>
+
+      <!-- Holo pile -->
+      <div class="pile" style="border-color: rgba(123,108,246,0.25);">
+        <div class="pile-header">
+          <span class="pile-icon">✨</span>
+          <span class="pile-name holo">Holographic</span>
+          <span class="pile-count" id="holoCount">0</span>
+        </div>
+        <div class="pile-cards" id="holoPile"></div>
+        <div class="pile-empty" id="holoEmpty">No cards yet</div>
+        <div class="price-tag holo"><span class="amount">$<span id="priceHoloLabel"></span></span> per card</div>
+        <div class="add-card-row" id="addHoloRow">
+          <input type="text" id="addHoloInput" placeholder="Card name…" onkeydown="if(event.key==='Enter')addCard('holo')">
+          <button onclick="addCard('holo')" style="color:var(--holo)">+</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn btn-secondary" onclick="goTo(1)">← Back</button>
+      <button class="btn btn-primary" onclick="goTo(3)" id="btn2">Continue →</button>
+    </div>
+  </div>
+
+  <!-- ======== STEP 3: Contact ======== -->
+  <div class="panel" id="panel-3">
+    <div class="panel-title">Your contact info</div>
+    <div class="panel-sub">So I can reach you about your order. Payment will be handled separately.</div>
+
+    <div class="field">
+      <label>Name</label>
+      <input type="text" id="custName" placeholder="Your name">
+    </div>
+    <div class="field">
+      <label>Email or Discord handle</label>
+      <input type="text" id="custContact" placeholder="you@email.com or YourName#1234">
+    </div>
+    <div class="field">
+      <label>Notes (optional)</label>
+      <textarea id="custNotes" placeholder="Anything else I should know about your order…"></textarea>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn btn-secondary" onclick="goTo(2)">← Back</button>
+      <button class="btn btn-primary" onclick="goTo(4)">Review Order →</button>
+    </div>
+  </div>
+
+  <!-- ======== STEP 4: Review ======== -->
+  <div class="panel" id="panel-4">
+    <div class="panel-title">Review your order</div>
+    <div class="panel-sub">Double-check everything before submitting.</div>
+
+    <div id="warningBox" style="display:none"></div>
+
+    <div class="review-block">
+      <h3>Card Source</h3>
+      <div id="reviewSource"></div>
+    </div>
+
+    <div class="review-block">
+      <h3>Regular Cards</h3>
+      <div id="reviewRegular"></div>
+    </div>
+
+    <div class="review-block">
+      <h3>Holographic Cards</h3>
+      <div id="reviewHolo"></div>
+    </div>
+
+    <div class="review-block">
+      <h3>Pricing Breakdown</h3>
+      <div id="reviewPricing"></div>
+    </div>
+
+    <div class="review-total">
+      <div class="label">Order Total</div>
+      <div class="amount" id="reviewGrandTotal"></div>
+    </div>
+
+    <div class="review-block">
+      <h3>Contact</h3>
+      <div id="reviewContact"></div>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn btn-secondary" onclick="goTo(3)">← Back</button>
+      <button class="btn btn-primary" onclick="submitOrder()" id="btnSubmit">Submit Order ✦</button>
+    </div>
+    <p style="font-size:12px;color:var(--muted);margin-top:0.75rem;">By submitting you agree that partial sheets are billed as full sheets of 8.</p>
+  </div>
+
+  <!-- ======== SUCCESS ======== -->
+  <div class="panel" id="panel-5">
+    <div class="success-screen">
+      <div class="success-icon">✦</div>
+      <h2>Order Received!</h2>
+      <p>Your order has been sent. I'll reach out to you shortly to confirm and arrange payment.</p>
+      <button class="btn btn-primary" onclick="resetOrder()">Place Another Order</button>
+    </div>
+  </div>
+
+</div>
+
+<!-- EmailJS -->
+<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+
+<script>
+// ---- State ----
+let state = {
+  step: 1,
+  source: null,          // 'proxxied' | 'cardsmith' | 'custom'
+  customFiles: [],       // [{name, cardName, dataUrl}]
+  regularCards: [],      // [string]
+  holoCards: [],         // [string]
+};
+
+const STEPS = ['Source', 'Cards', 'Contact', 'Review'];
+
+// ---- Init ----
+document.addEventListener('DOMContentLoaded', () => {
+  emailjs.init(CONFIG.EMAILJS_PUBLIC_KEY);
+  document.getElementById('priceRegLabel').textContent  = CONFIG.REGULAR_PRICE.toFixed(2);
+  document.getElementById('priceHoloLabel').textContent = CONFIG.HOLO_PRICE.toFixed(2);
+  renderSteps();
+  setupDragDrop();
+});
+
+// ---- Steps ----
+function renderSteps() {
+  const bar = document.getElementById('stepsBar');
+  bar.innerHTML = '';
+  STEPS.forEach((label, i) => {
+    const n = i + 1;
+    const dot = document.createElement('div');
+    dot.className = 'step-item';
+    const cls = n < state.step ? 'done' : n === state.step ? 'active' : '';
+    dot.innerHTML = `
+      <div class="step-dot ${cls}">${n < state.step ? '✓' : n}</div>
+      <div class="step-label ${n === state.step ? 'active' : ''}">${label}</div>`;
+    bar.appendChild(dot);
+    if (i < STEPS.length - 1) {
+      const conn = document.createElement('div');
+      conn.className = 'steps-connector';
+      bar.appendChild(conn);
+    }
+  });
+}
+
+function goTo(n) {
+  if (n === 2 && !validateStep1()) return;
+  if (n === 3 && !validateStep2()) return;
+  if (n === 4 && !validateStep3()) return;
+  if (n === 4) buildReview();
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.getElementById('panel-' + n).classList.add('active');
+  state.step = n;
+  renderSteps();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+// ---- Validation ----
+function validateStep1() {
+  if (!state.source) { alert('Please choose a card source.'); return false; }
+  if (state.source === 'proxxied' && !document.getElementById('proxxiedLink').value.trim()) {
+    alert('Please paste your Proxxied share link.'); return false;
+  }
+  if (state.source === 'cardsmith' && !document.getElementById('cardsmithLink').value.trim()) {
+    alert('Please paste your MTG Cardsmith link.'); return false;
+  }
+  if (state.source === 'custom' && state.customFiles.length === 0) {
+    alert('Please upload at least one image.'); return false;
+  }
+  return true;
+}
+
+function validateStep2() {
+  const total = state.regularCards.length + state.holoCards.length;
+  if (total < CONFIG.MIN_CARDS) {
+    alert(`Minimum order is ${CONFIG.MIN_CARDS} cards total. You have ${total}.`); return false;
+  }
+  return true;
+}
+
+function validateStep3() {
+  if (!document.getElementById('custName').value.trim()) { alert('Please enter your name.'); return false; }
+  if (!document.getElementById('custContact').value.trim()) { alert('Please enter your email or Discord.'); return false; }
+  return true;
+}
+
+// ---- Source selection ----
+function selectSource(el) {
+  document.querySelectorAll('.source-card').forEach(c => c.classList.remove('selected'));
+  el.classList.add('selected');
+  state.source = el.dataset.source;
+  ['proxxied','cardsmith','custom'].forEach(s => {
+    document.getElementById('src-' + s).style.display = s === state.source ? 'block' : 'none';
+  });
+  // For custom, pre-populate piles from uploaded files
+  if (state.source === 'custom') {
+    state.regularCards = state.customFiles.map(f => f.cardName);
+    state.holoCards = [];
+    renderPiles();
+    // hide manual add rows for custom (names come from filenames)
+    document.getElementById('addRegRow').style.display = 'none';
+    document.getElementById('addHoloRow').style.display = 'none';
+  } else {
+    document.getElementById('addRegRow').style.display = 'flex';
+    document.getElementById('addHoloRow').style.display = 'flex';
+  }
+}
+
+// ---- File upload ----
+function handleFiles(files) {
+  Array.from(files).forEach(file => {
+    const cardName = file.name.replace(/\.[^.]+$/, ''); // strip extension
+    const reader = new FileReader();
+    reader.onload = e => {
+      state.customFiles.push({ name: file.name, cardName, dataUrl: e.target.result });
+      renderFileList();
+      if (state.source === 'custom') {
+        state.regularCards = state.customFiles.map(f => f.cardName);
+        state.holoCards = [];
+        renderPiles();
+      }
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+function renderFileList() {
+  const list = document.getElementById('fileList');
+  list.innerHTML = '';
+  state.customFiles.forEach((f, i) => {
+    const chip = document.createElement('div');
+    chip.className = 'file-chip';
+    chip.innerHTML = `<span class="fname">📄 ${f.name}</span><span class="cardname">→ ${f.cardName}</span><span class="remove" onclick="removeFile(${i})">✕</span>`;
+    list.appendChild(chip);
+  });
+}
+
+function removeFile(i) {
+  state.customFiles.splice(i, 1);
+  renderFileList();
+  if (state.source === 'custom') {
+    state.regularCards = state.customFiles.map(f => f.cardName);
+    state.holoCards = [];
+    renderPiles();
+  }
+}
+
+// drag & drop on upload zone
+function setupDragDrop() {
+  const zone = document.getElementById('uploadZone');
+  if (!zone) return;
+  zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('drag-over'); });
+  zone.addEventListener('dragleave', () => zone.classList.remove('drag-over'));
+  zone.addEventListener('drop', e => {
+    e.preventDefault();
+    zone.classList.remove('drag-over');
+    handleFiles(e.dataTransfer.files);
+  });
+}
+
+// ---- Pile management ----
+function addCard(pile) {
+  const inputId = pile === 'regular' ? 'addRegInput' : 'addHoloInput';
+  const input = document.getElementById(inputId);
+  const name = input.value.trim();
+  if (!name) return;
+  if (pile === 'regular') state.regularCards.push(name);
+  else state.holoCards.push(name);
+  input.value = '';
+  renderPiles();
+}
+
+function moveCard(name, from, to) {
+  const fromArr = from === 'regular' ? state.regularCards : state.holoCards;
+  const toArr   = to   === 'regular' ? state.regularCards : state.holoCards;
+  const idx = fromArr.indexOf(name);
+  if (idx > -1) { fromArr.splice(idx, 1); toArr.push(name); }
+  renderPiles();
+}
+
+function deleteCard(name, pile) {
+  const arr = pile === 'regular' ? state.regularCards : state.holoCards;
+  const idx = arr.indexOf(name);
+  if (idx > -1) arr.splice(idx, 1);
+  renderPiles();
+}
+
+function renderPiles() {
+  renderOnePile('regular', state.regularCards, 'holo');
+  renderOnePile('holo',    state.holoCards,    'regular');
+  updateLiveTotals();
+}
+
+function renderOnePile(pile, cards, otherPile) {
+  const container = document.getElementById(pile + 'Pile');
+  const empty     = document.getElementById(pile + 'Empty');
+  const count     = document.getElementById(pile === 'regular' ? 'regCount' : 'holoCount');
+  container.innerHTML = '';
+  count.textContent = cards.length;
+  empty.style.display = cards.length === 0 ? 'block' : 'none';
+  cards.forEach(name => {
+    const item = document.createElement('div');
+    item.className = 'pile-card-item';
+    const moveLabel = otherPile === 'holo' ? '→ Holo' : '→ Regular';
+    item.innerHTML = `
+      <span class="card-label">${name}</span>
+      <span class="move-btn" onclick="moveCard('${name.replace(/'/g,"\\'")}','${pile}','${otherPile}')">${moveLabel}</span>
+      <span class="del-btn" onclick="deleteCard('${name.replace(/'/g,"\\'")}','${pile}')">✕</span>`;
+    container.appendChild(item);
+  });
+}
+
+function updateLiveTotals() {
+  const r = state.regularCards.length;
+  const h = state.holoCards.length;
+  const rBilled = billable(r);
+  const hBilled = billable(h);
+  const total = r + h;
+  const est = rBilled * CONFIG.REGULAR_PRICE + hBilled * CONFIG.HOLO_PRICE;
+  document.getElementById('ltReg').textContent   = r + ' card' + (r !== 1 ? 's' : '');
+  document.getElementById('ltHolo').textContent  = h + ' card' + (h !== 1 ? 's' : '');
+  document.getElementById('ltTotal').textContent = total;
+  document.getElementById('ltGrand').textContent = '$' + est.toFixed(2);
+}
+
+function billable(n) {
+  if (n === 0) return 0;
+  return Math.ceil(n / 8) * 8;
+}
+
+// ---- Review screen ----
+function buildReview() {
+  const r = state.regularCards.length;
+  const h = state.holoCards.length;
+  const rBilled = billable(r);
+  const hBilled = billable(h);
+  const rTotal = rBilled * CONFIG.REGULAR_PRICE;
+  const hTotal = hBilled * CONFIG.HOLO_PRICE;
+  const grand = rTotal + hTotal;
+
+  // Warning box
+  const warnings = [];
+  if (r > 0 && r % 8 !== 0) warnings.push(`You have <strong>${r} regular cards</strong> — billed as <strong>${rBilled} (${rBilled/8} sheet${rBilled/8!==1?'s':''})</strong>.`);
+  if (h > 0 && h % 8 !== 0) warnings.push(`You have <strong>${h} holo cards</strong> — billed as <strong>${hBilled} (${hBilled/8} sheet${hBilled/8!==1?'s':''})</strong>.`);
+  const wBox = document.getElementById('warningBox');
+  if (warnings.length) {
+    wBox.style.display = 'block';
+    wBox.innerHTML = `<div class="warning-box"><strong>⚠ Partial sheets will be charged as full sheets</strong>${warnings.map(w=>`<div class="warning-item">· ${w}</div>`).join('')}</div>`;
+  } else {
+    wBox.style.display = 'none';
+  }
+
+  // Source block
+  const srcMap = { proxxied: 'Proxxied.com', cardsmith: 'MTG Cardsmith', custom: 'Custom Artwork' };
+  let srcHtml = `<div class="review-row"><div class="rl">Type</div><div class="rv">${srcMap[state.source]}</div></div>`;
+  if (state.source === 'proxxied') srcHtml += `<div class="review-row"><div class="rl">Link</div><div class="rv" style="word-break:break-all">${document.getElementById('proxxiedLink').value}</div></div>`;
+  if (state.source === 'cardsmith') srcHtml += `<div class="review-row"><div class="rl">Link</div><div class="rv" style="word-break:break-all">${document.getElementById('cardsmithLink').value}</div></div>`;
+  if (state.source === 'custom') srcHtml += `<div class="review-row"><div class="rl">Files</div><div class="rv">${state.customFiles.length} image${state.customFiles.length!==1?'s':''} uploaded</div></div>`;
+  document.getElementById('reviewSource').innerHTML = srcHtml;
+
+  // Regular cards
+  document.getElementById('reviewRegular').innerHTML = r === 0 ? '<span style="color:var(--muted);font-size:13px;">No regular cards</span>' :
+    `<div class="card-list-preview">${state.regularCards.map(c=>`<span class="card-pill">${c}</span>`).join('')}</div>`;
+
+  // Holo cards
+  document.getElementById('reviewHolo').innerHTML = h === 0 ? '<span style="color:var(--muted);font-size:13px;">No holographic cards</span>' :
+    `<div class="card-list-preview">${state.holoCards.map(c=>`<span class="card-pill holo">${c}</span>`).join('')}</div>`;
+
+  // Pricing
+  let priceHtml = '';
+  if (r > 0) priceHtml += `<div class="review-row"><div class="rl">Regular — ${r} cards (billed ${rBilled})</div><div class="rv">$${rTotal.toFixed(2)}</div></div>`;
+  if (h > 0) priceHtml += `<div class="review-row"><div class="rl">Holo — ${h} cards (billed ${hBilled})</div><div class="rv">$${hTotal.toFixed(2)}</div></div>`;
+  document.getElementById('reviewPricing').innerHTML = priceHtml || '<span style="color:var(--muted);font-size:13px;">No cards added</span>';
+
+  document.getElementById('reviewGrandTotal').textContent = '$' + grand.toFixed(2);
+
+  // Contact
+  document.getElementById('reviewContact').innerHTML = `
+    <div class="review-row"><div class="rl">Name</div><div class="rv">${document.getElementById('custName').value}</div></div>
+    <div class="review-row"><div class="rl">Contact</div><div class="rv">${document.getElementById('custContact').value}</div></div>
+    ${document.getElementById('custNotes').value ? `<div class="review-row"><div class="rl">Notes</div><div class="rv">${document.getElementById('custNotes').value}</div></div>` : ''}`;
+}
+
+// ---- Submit ----
+async function submitOrder() {
+  const btn = document.getElementById('btnSubmit');
+  btn.disabled = true;
+  btn.textContent = 'Sending…';
+
+  const r = state.regularCards.length;
+  const h = state.holoCards.length;
+  const rBilled = billable(r);
+  const hBilled = billable(h);
+  const grand = (rBilled * CONFIG.REGULAR_PRICE + hBilled * CONFIG.HOLO_PRICE).toFixed(2);
+
+  const srcMap = { proxxied: 'Proxxied.com', cardsmith: 'MTG Cardsmith', custom: 'Custom Artwork' };
+  let sourceDetail = srcMap[state.source];
+  if (state.source === 'proxxied') sourceDetail += '\n' + document.getElementById('proxxiedLink').value;
+  if (state.source === 'cardsmith') sourceDetail += '\n' + document.getElementById('cardsmithLink').value;
+  if (state.source === 'custom') sourceDetail += '\n' + state.customFiles.map(f => f.name).join(', ');
+
+  const templateParams = {
+    to_email:        CONFIG.YOUR_EMAIL,
+    customer_name:   document.getElementById('custName').value,
+    customer_contact:document.getElementById('custContact').value,
+    customer_notes:  document.getElementById('custNotes').value || '(none)',
+    source_type:     sourceDetail,
+    regular_cards:   r > 0 ? state.regularCards.join(', ') : '(none)',
+    regular_count:   r,
+    regular_billed:  rBilled,
+    holo_cards:      h > 0 ? state.holoCards.join(', ') : '(none)',
+    holo_count:      h,
+    holo_billed:     hBilled,
+    order_total:     '$' + grand,
+    order_date:      new Date().toLocaleString(),
+  };
+
+  try {
+    await emailjs.send(CONFIG.EMAILJS_SERVICE_ID, CONFIG.EMAILJS_TEMPLATE_ID, templateParams);
+    goTo(5);
+  } catch (err) {
+    console.error(err);
+    alert('Something went wrong sending your order. Please try again or contact me directly.');
+    btn.disabled = false;
+    btn.textContent = 'Submit Order ✦';
+  }
+}
+
+function resetOrder() {
+  state = { step: 1, source: null, customFiles: [], regularCards: [], holoCards: [] };
+  document.querySelectorAll('.source-card').forEach(c => c.classList.remove('selected'));
+  ['proxxied','cardsmith','custom'].forEach(s => document.getElementById('src-'+s).style.display='none');
+  document.getElementById('fileList').innerHTML = '';
+  document.getElementById('custName').value = '';
+  document.getElementById('custContact').value = '';
+  document.getElementById('custNotes').value = '';
+  document.getElementById('proxxiedLink').value = '';
+  document.getElementById('cardsmithLink').value = '';
+  renderPiles();
+  goTo(1);
+}
+</script>
+</body>
+</html>
