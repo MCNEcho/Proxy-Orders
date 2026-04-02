@@ -530,7 +530,7 @@ header p {
       <div class="source-card" data-source="proxxied" onclick="selectSource(this)">
         <div class="source-icon">🃏</div>
         <div class="source-name">Proxxied.com</div>
-        <div class="source-desc">Build your list on Proxxied and paste your share link here.</div>
+        <div class="source-desc">Build your list on Proxxied, copy the decklist with MPC Art IDs, and paste it here.</div>
       </div>
       <div class="source-card" data-source="cardsmith" onclick="selectSource(this)">
         <div class="source-icon">⚒️</div>
@@ -547,14 +547,24 @@ header p {
     <!-- Proxxied fields -->
     <div id="src-proxxied" style="display:none">
       <div class="ext-block">
-        <p>Open Proxxied, build your card list, then copy your share link and paste it below.</p>
+        <p>Build your list on Proxxied, then export the decklist:</p>
+        <ol style="font-size:13px;color:var(--muted);margin:0.5rem 0 1rem 1.25rem;line-height:2;">
+          <li>On the right side panel, find <strong style="color:var(--text)">Export</strong></li>
+          <li>Open the <strong style="color:var(--text)">Copy Decklist</strong> dropdown</li>
+          <li>Click <strong style="color:var(--gold)">With MPC Art IDs</strong></li>
+          <li>Paste the result into the box below</li>
+        </ol>
         <a class="btn-ext" href="https://proxxied.com" target="_blank">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
           Open Proxxied.com
         </a>
         <div class="field">
-          <label>Proxxied Share Link</label>
-          <input type="text" id="proxxiedLink" placeholder="https://proxxied.com/share/...">
+          <label>Paste Decklist (With MPC Art IDs)</label>
+          <textarea id="proxxiedDecklist" rows="8" placeholder="1x Emeria, the Sky Ruin (sld) 1291&#10;1x Akroma's Memorial (spg) 81&#10;1x Battle Angels of Tyr [mpc:10WGqL9aIpn_IXxtRJwRaPXhLuisP4NHU]&#10;1x Avacyn, Angel of Hope (inr) 482" oninput="previewProxxiedParse()"></textarea>
+        </div>
+        <div id="proxxiedPreview" style="display:none">
+          <p style="font-size:12px;color:var(--muted);margin-bottom:0.5rem;text-transform:uppercase;letter-spacing:0.07em;font-weight:600;">Cards detected</p>
+          <div class="card-list-preview" id="proxxiedPreviewList"></div>
         </div>
       </div>
     </div>
@@ -785,8 +795,9 @@ function goTo(n) {
 // ---- Validation ----
 function validateStep1() {
   if (!state.source) { alert('Please choose a card source.'); return false; }
-  if (state.source === 'proxxied' && !document.getElementById('proxxiedLink').value.trim()) {
-    alert('Please paste your Proxxied share link.'); return false;
+  if (state.source === 'proxxied') {
+    const cards = parseProxxiedDecklist(document.getElementById('proxxiedDecklist').value);
+    if (cards.length === 0) { alert('Please paste your Proxxied decklist (With MPC Art IDs).'); return false; }
   }
   if (state.source === 'cardsmith' && !document.getElementById('cardsmithLink').value.trim()) {
     alert('Please paste your MTG Cardsmith link.'); return false;
@@ -799,8 +810,8 @@ function validateStep1() {
 
 function validateStep2() {
   const total = state.regularCards.length + state.holoCards.length;
-  if (total < CONFIG.MIN_CARDS) {
-    alert(`Minimum order is ${CONFIG.MIN_CARDS} cards total. You have ${total}.`); return false;
+  if (total === 0) {
+    alert('Please add at least one card before continuing.'); return false;
   }
   return true;
 }
@@ -819,14 +830,22 @@ function selectSource(el) {
   ['proxxied','cardsmith','custom'].forEach(s => {
     document.getElementById('src-' + s).style.display = s === state.source ? 'block' : 'none';
   });
-  // For custom, pre-populate piles from uploaded files
+  // For proxxied or custom, pre-populate piles from parsed cards/filenames
   if (state.source === 'custom') {
     state.regularCards = state.customFiles.map(f => f.cardName);
     state.holoCards = [];
     renderPiles();
-    // hide manual add rows for custom (names come from filenames)
     document.getElementById('addRegRow').style.display = 'none';
     document.getElementById('addHoloRow').style.display = 'none';
+  } else if (state.source === 'proxxied') {
+    const existing = document.getElementById('proxxiedDecklist').value;
+    if (existing.trim()) {
+      state.regularCards = parseProxxiedDecklist(existing);
+      state.holoCards = [];
+      renderPiles();
+    }
+    document.getElementById('addRegRow').style.display = 'flex';
+    document.getElementById('addHoloRow').style.display = 'flex';
   } else {
     document.getElementById('addRegRow').style.display = 'flex';
     document.getElementById('addHoloRow').style.display = 'flex';
@@ -965,10 +984,13 @@ function buildReview() {
   const hTotal = hBilled * CONFIG.HOLO_PRICE;
   const grand = rTotal + hTotal;
 
-  // Warning box
+  // Warning box — any pile not a clean multiple of 8 gets flagged
   const warnings = [];
-  if (r > 0 && r % 8 !== 0) warnings.push(`You have <strong>${r} regular cards</strong> — billed as <strong>${rBilled} (${rBilled/8} sheet${rBilled/8!==1?'s':''})</strong>.`);
-  if (h > 0 && h % 8 !== 0) warnings.push(`You have <strong>${h} holo cards</strong> — billed as <strong>${hBilled} (${hBilled/8} sheet${hBilled/8!==1?'s':''})</strong>.`);
+  if (r > 0 && r % 8 !== 0) warnings.push(`You have <strong>${r} regular card${r!==1?'s':''}</strong> — billed as <strong>${rBilled} (${rBilled/8} sheet${rBilled/8!==1?'s':''})</strong>.`);
+  if (h > 0 && h % 8 !== 0) warnings.push(`You have <strong>${h} holo card${h!==1?'s':''}</strong> — billed as <strong>${hBilled} (${hBilled/8} sheet${hBilled/8!==1?'s':''})</strong>.`);
+  // Always warn if either pile is under 8
+  if (r > 0 && r < 8) warnings.push(`Your regular pile has fewer than 8 cards — the remaining <strong>${8-r} slot${8-r!==1?'s':''}</strong> on that sheet will still be charged.`);
+  if (h > 0 && h < 8) warnings.push(`Your holo pile has fewer than 8 cards — the remaining <strong>${8-h} slot${8-h!==1?'s':''}</strong> on that sheet will still be charged.`);
   const wBox = document.getElementById('warningBox');
   if (warnings.length) {
     wBox.style.display = 'block';
@@ -1022,7 +1044,7 @@ async function submitOrder() {
 
   const srcMap = { proxxied: 'Proxxied.com', cardsmith: 'MTG Cardsmith', custom: 'Custom Artwork' };
   let sourceDetail = srcMap[state.source];
-  if (state.source === 'proxxied') sourceDetail += '\n' + document.getElementById('proxxiedLink').value;
+  if (state.source === 'proxxied') sourceDetail += '\nDecklist pasted — ' + (state.regularCards.length + state.holoCards.length) + ' cards parsed';
   if (state.source === 'cardsmith') sourceDetail += '\n' + document.getElementById('cardsmithLink').value;
   if (state.source === 'custom') sourceDetail += '\n' + state.customFiles.map(f => f.name).join(', ');
 
@@ -1053,10 +1075,51 @@ async function submitOrder() {
   }
 }
 
+// ---- Proxxied decklist parser ----
+// Handles lines like:
+//   1x Emeria, the Sky Ruin (sld) 1291
+//   1x Battle Angels of Tyr [mpc:10WGqL9a...]
+//   2x Some Card Name
+function parseProxxiedDecklist(text) {
+  if (!text.trim()) return [];
+  return text.split('\n')
+    .map(line => line.trim())
+    .filter(line => line.length > 0)
+    .map(line => {
+      // strip leading quantity: 1x, 2x, 1X, etc.
+      let name = line.replace(/^\d+[xX]\s+/, '');
+      // strip set code in parens: (sld) 1291  or  (inr) 482
+      name = name.replace(/\s*\([a-zA-Z0-9]+\)\s*\d*/g, '');
+      // strip MPC art ID in brackets: [mpc:XXXXX]
+      name = name.replace(/\s*\[mpc:[^\]]+\]/gi, '');
+      // strip any trailing/leading whitespace
+      return name.trim();
+    })
+    .filter(name => name.length > 0);
+}
+
+function previewProxxiedParse() {
+  const text = document.getElementById('proxxiedDecklist').value;
+  const cards = parseProxxiedDecklist(text);
+  const preview = document.getElementById('proxxiedPreview');
+  const list = document.getElementById('proxxiedPreviewList');
+  if (cards.length === 0) { preview.style.display = 'none'; return; }
+  preview.style.display = 'block';
+  list.innerHTML = cards.map(c => `<span class="card-pill">${c}</span>`).join('');
+  // Also keep piles in sync as they type
+  if (state.source === 'proxxied') {
+    state.regularCards = cards;
+    state.holoCards = [];
+    renderPiles();
+  }
+}
+
 function resetOrder() {
   state = { step: 1, source: null, customFiles: [], regularCards: [], holoCards: [] };
   document.querySelectorAll('.source-card').forEach(c => c.classList.remove('selected'));
   ['proxxied','cardsmith','custom'].forEach(s => document.getElementById('src-'+s).style.display='none');
+  document.getElementById('proxxiedDecklist').value = '';
+  document.getElementById('proxxiedPreview').style.display = 'none';
   document.getElementById('fileList').innerHTML = '';
   document.getElementById('custName').value = '';
   document.getElementById('custContact').value = '';
