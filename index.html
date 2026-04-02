@@ -587,14 +587,33 @@ header p {
     <!-- Custom artwork fields -->
     <div id="src-custom" style="display:none">
       <div class="ext-block">
-        <p>Name each image file after the card you want printed (e.g. <strong style="color:var(--gold)">Black Lotus.png</strong>). Upload as many as you like.</p>
-        <div class="upload-zone" id="uploadZone" onclick="document.getElementById('fileInput').click()">
-          <div class="upload-icon">📂</div>
-          <p><strong>Click to upload</strong> or drag & drop your images here</p>
-          <p style="margin-top:6px;font-size:11px;">Filename = card name &nbsp;·&nbsp; PNG, JPG, WEBP accepted</p>
+        <p>Upload your artwork images to a Google Drive folder, then share the folder link below. <strong style="color:var(--text)">Name each image file after the card you want printed</strong> — for example <strong style="color:var(--gold)">Black Lotus.png</strong>, <strong style="color:var(--gold)">Sol Ring.jpg</strong>.</p>
+
+        <ol style="font-size:13px;color:var(--muted);margin:0.75rem 0 1rem 1.25rem;line-height:2.2;">
+          <li>Go to <strong style="color:var(--text)">Google Drive</strong> and create a new folder</li>
+          <li>Name and upload each image as the card name (e.g. <strong style="color:var(--gold)">Black Lotus.png</strong>)</li>
+          <li>Right-click the folder → <strong style="color:var(--text)">Share</strong> → <strong style="color:var(--text)">Anyone with the link</strong></li>
+          <li>Click <strong style="color:var(--text)">Copy link</strong> and paste it below</li>
+        </ol>
+
+        <a class="btn-ext" href="https://drive.google.com" target="_blank">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+          Open Google Drive
+        </a>
+
+        <div class="field">
+          <label>Google Drive Folder Link</label>
+          <input type="text" id="customDriveLink" placeholder="https://drive.google.com/drive/folders/...">
         </div>
-        <input type="file" id="fileInput" multiple accept="image/*" onchange="handleFiles(this.files)">
-        <div class="file-list" id="fileList"></div>
+
+        <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:0.75rem 1rem;font-size:12px;color:var(--muted);line-height:1.7;">
+          ⚠ Make sure sharing is set to <strong style="color:var(--text)">Anyone with the link</strong> — otherwise I won't be able to access your images.
+        </div>
+
+        <div style="margin-top:1rem;">
+          <p style="font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:0.5rem;">Then list your card names below</p>
+          <p style="font-size:12px;color:var(--muted);margin-bottom:0.75rem;">Type each card name and press Enter or click + to add it to the regular pile. You can move cards to Holo in the next step.</p>
+        </div>
       </div>
     </div>
 
@@ -742,10 +761,9 @@ header p {
 // ---- State ----
 let state = {
   step: 1,
-  source: null,          // 'proxxied' | 'cardsmith' | 'custom'
-  customFiles: [],       // [{name, cardName, dataUrl}]
-  regularCards: [],      // [string]
-  holoCards: [],         // [string]
+  source: null,
+  regularCards: [],
+  holoCards: [],
 };
 
 const STEPS = ['Source', 'Cards', 'Contact', 'Review'];
@@ -756,7 +774,6 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('priceRegLabel').textContent  = CONFIG.REGULAR_PRICE.toFixed(2);
   document.getElementById('priceHoloLabel').textContent = CONFIG.HOLO_PRICE.toFixed(2);
   renderSteps();
-  setupDragDrop();
 });
 
 // ---- Steps ----
@@ -804,8 +821,13 @@ function validateStep1() {
   if (state.source === 'cardsmith' && !document.getElementById('cardsmithLink').value.trim()) {
     alert('Please paste your MTG Cardsmith link.'); return false;
   }
-  if (state.source === 'custom' && state.customFiles.length === 0) {
-    alert('Please upload at least one image.'); return false;
+  if (state.source === 'custom') {
+    if (!document.getElementById('customDriveLink').value.trim()) {
+      alert('Please paste your Google Drive folder link.'); return false;
+    }
+    if (state.regularCards.length + state.holoCards.length === 0) {
+      alert('Please add at least one card name.'); return false;
+    }
   }
   return true;
 }
@@ -834,11 +856,8 @@ function selectSource(el) {
   });
   // For proxxied or custom, pre-populate piles from parsed cards/filenames
   if (state.source === 'custom') {
-    state.regularCards = state.customFiles.map(f => f.cardName);
-    state.holoCards = [];
-    renderPiles();
-    document.getElementById('addRegRow').style.display = 'none';
-    document.getElementById('addHoloRow').style.display = 'none';
+    document.getElementById('addRegRow').style.display = 'flex';
+    document.getElementById('addHoloRow').style.display = 'flex';
   } else if (state.source === 'proxxied') {
     const existing = document.getElementById('proxxiedDecklist').value;
     if (existing.trim()) {
@@ -854,58 +873,6 @@ function selectSource(el) {
   }
 }
 
-// ---- File upload ----
-function handleFiles(files) {
-  Array.from(files).forEach(file => {
-    const cardName = file.name.replace(/\.[^.]+$/, ''); // strip extension
-    const reader = new FileReader();
-    reader.onload = e => {
-      state.customFiles.push({ name: file.name, cardName, dataUrl: e.target.result });
-      renderFileList();
-      if (state.source === 'custom') {
-        state.regularCards = state.customFiles.map(f => f.cardName);
-        state.holoCards = [];
-        renderPiles();
-      }
-    };
-    reader.readAsDataURL(file);
-  });
-}
-
-function renderFileList() {
-  const list = document.getElementById('fileList');
-  list.innerHTML = '';
-  state.customFiles.forEach((f, i) => {
-    const chip = document.createElement('div');
-    chip.className = 'file-chip';
-    chip.innerHTML = `<span class="fname">📄 ${f.name}</span><span class="cardname">→ ${f.cardName}</span><span class="remove" onclick="removeFile(${i})">✕</span>`;
-    list.appendChild(chip);
-  });
-}
-
-function removeFile(i) {
-  state.customFiles.splice(i, 1);
-  renderFileList();
-  if (state.source === 'custom') {
-    state.regularCards = state.customFiles.map(f => f.cardName);
-    state.holoCards = [];
-    renderPiles();
-  }
-}
-
-// drag & drop on upload zone
-function setupDragDrop() {
-  const zone = document.getElementById('uploadZone');
-  if (!zone) return;
-  zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('drag-over'); });
-  zone.addEventListener('dragleave', () => zone.classList.remove('drag-over'));
-  zone.addEventListener('drop', e => {
-    e.preventDefault();
-    zone.classList.remove('drag-over');
-    handleFiles(e.dataTransfer.files);
-  });
-}
-
 // ---- Pile management ----
 function addCard(pile) {
   const inputId = pile === 'regular' ? 'addRegInput' : 'addHoloInput';
@@ -915,21 +882,6 @@ function addCard(pile) {
   if (pile === 'regular') state.regularCards.push(name);
   else state.holoCards.push(name);
   input.value = '';
-  renderPiles();
-}
-
-function moveCard(name, from, to) {
-  const fromArr = from === 'regular' ? state.regularCards : state.holoCards;
-  const toArr   = to   === 'regular' ? state.regularCards : state.holoCards;
-  const idx = fromArr.indexOf(name);
-  if (idx > -1) { fromArr.splice(idx, 1); toArr.push(name); }
-  renderPiles();
-}
-
-function deleteCard(name, pile) {
-  const arr = pile === 'regular' ? state.regularCards : state.holoCards;
-  const idx = arr.indexOf(name);
-  if (idx > -1) arr.splice(idx, 1);
   renderPiles();
 }
 
@@ -946,16 +898,40 @@ function renderOnePile(pile, cards, otherPile) {
   container.innerHTML = '';
   count.textContent = cards.length;
   empty.style.display = cards.length === 0 ? 'block' : 'none';
-  cards.forEach(name => {
+  cards.forEach((name, idx) => {
     const item = document.createElement('div');
     item.className = 'pile-card-item';
     const moveLabel = otherPile === 'holo' ? '→ Holo' : '→ Regular';
-    item.innerHTML = `
-      <span class="card-label">${name}</span>
-      <span class="move-btn" onclick="moveCard('${name.replace(/'/g,"\\'")}','${pile}','${otherPile}')">${moveLabel}</span>
-      <span class="del-btn" onclick="deleteCard('${name.replace(/'/g,"\\'")}','${pile}')">✕</span>`;
+    const moveBtn = document.createElement('span');
+    moveBtn.className = 'move-btn';
+    moveBtn.textContent = moveLabel;
+    moveBtn.addEventListener('click', () => moveCardByIndex(idx, pile, otherPile));
+    const delBtn = document.createElement('span');
+    delBtn.className = 'del-btn';
+    delBtn.textContent = '✕';
+    delBtn.addEventListener('click', () => deleteCardByIndex(idx, pile));
+    const label = document.createElement('span');
+    label.className = 'card-label';
+    label.textContent = name;
+    item.appendChild(label);
+    item.appendChild(moveBtn);
+    item.appendChild(delBtn);
     container.appendChild(item);
   });
+}
+
+function moveCardByIndex(idx, from, to) {
+  const fromArr = from === 'regular' ? state.regularCards : state.holoCards;
+  const toArr   = to   === 'regular' ? state.regularCards : state.holoCards;
+  const [name] = fromArr.splice(idx, 1);
+  toArr.push(name);
+  renderPiles();
+}
+
+function deleteCardByIndex(idx, pile) {
+  const arr = pile === 'regular' ? state.regularCards : state.holoCards;
+  arr.splice(idx, 1);
+  renderPiles();
 }
 
 function updateLiveTotals() {
@@ -986,13 +962,16 @@ function buildReview() {
   const hTotal = hBilled * CONFIG.HOLO_PRICE;
   const grand = rTotal + hTotal;
 
-  // Warning box — any pile not a clean multiple of 8 gets flagged
+  // Warning box — flag any pile that won't fill a complete sheet
   const warnings = [];
-  if (r > 0 && r % 8 !== 0) warnings.push(`You have <strong>${r} regular card${r!==1?'s':''}</strong> — billed as <strong>${rBilled} (${rBilled/8} sheet${rBilled/8!==1?'s':''})</strong>.`);
-  if (h > 0 && h % 8 !== 0) warnings.push(`You have <strong>${h} holo card${h!==1?'s':''}</strong> — billed as <strong>${hBilled} (${hBilled/8} sheet${hBilled/8!==1?'s':''})</strong>.`);
-  // Always warn if either pile is under 8
-  if (r > 0 && r < 8) warnings.push(`Your regular pile has fewer than 8 cards — the remaining <strong>${8-r} slot${8-r!==1?'s':''}</strong> on that sheet will still be charged.`);
-  if (h > 0 && h < 8) warnings.push(`Your holo pile has fewer than 8 cards — the remaining <strong>${8-h} slot${8-h!==1?'s':''}</strong> on that sheet will still be charged.`);
+  if (r > 0 && r % 8 !== 0) {
+    const slots = 8 - (r % 8);
+    warnings.push(`You have <strong>${r} regular card${r!==1?'s':''}</strong> — billed as <strong>${rBilled} (${rBilled/8} sheet${rBilled/8!==1?'s':''})</strong>. The remaining <strong>${slots} empty slot${slots!==1?'s':''}</strong> on the last sheet will still be charged.`);
+  }
+  if (h > 0 && h % 8 !== 0) {
+    const slots = 8 - (h % 8);
+    warnings.push(`You have <strong>${h} holo card${h!==1?'s':''}</strong> — billed as <strong>${hBilled} (${hBilled/8} sheet${hBilled/8!==1?'s':''})</strong>. The remaining <strong>${slots} empty slot${slots!==1?'s':''}</strong> on the last sheet will still be charged.`);
+  }
   const wBox = document.getElementById('warningBox');
   if (warnings.length) {
     wBox.style.display = 'block';
@@ -1006,7 +985,7 @@ function buildReview() {
   let srcHtml = `<div class="review-row"><div class="rl">Type</div><div class="rv">${srcMap[state.source]}</div></div>`;
   if (state.source === 'proxxied') srcHtml += `<div class="review-row"><div class="rl">Decklist</div><div class="rv">${r + h} card${(r+h)!==1?'s':''} parsed from pasted decklist</div></div>`;
   if (state.source === 'cardsmith') srcHtml += `<div class="review-row"><div class="rl">Link</div><div class="rv" style="word-break:break-all">${document.getElementById('cardsmithLink').value}</div></div>`;
-  if (state.source === 'custom') srcHtml += `<div class="review-row"><div class="rl">Files</div><div class="rv">${state.customFiles.length} image${state.customFiles.length!==1?'s':''} uploaded</div></div>`;
+  if (state.source === 'custom') srcHtml += `<div class="review-row"><div class="rl">Google Drive</div><div class="rv" style="word-break:break-all">${document.getElementById('customDriveLink').value}</div></div>`;
   document.getElementById('reviewSource').innerHTML = srcHtml;
 
   // Regular cards
@@ -1048,7 +1027,7 @@ async function submitOrder() {
   let sourceDetail = srcMap[state.source];
   if (state.source === 'proxxied') sourceDetail += '\nDecklist pasted — ' + (state.regularCards.length + state.holoCards.length) + ' cards parsed';
   if (state.source === 'cardsmith') sourceDetail += '\n' + document.getElementById('cardsmithLink').value;
-  if (state.source === 'custom') sourceDetail += '\n' + state.customFiles.map(f => f.name).join(', ');
+  if (state.source === 'custom') sourceDetail += '\nGoogle Drive: ' + document.getElementById('customDriveLink').value;
 
   const templateParams = {
     to_email:        CONFIG.YOUR_EMAIL,
@@ -1056,10 +1035,11 @@ async function submitOrder() {
     customer_contact:document.getElementById('custContact').value,
     customer_notes:  document.getElementById('custNotes').value || '(none)',
     source_type:     sourceDetail,
-    regular_cards:   r > 0 ? state.regularCards.join(', ') : '(none)',
+    raw_decklist:    state.source === 'proxxied' ? document.getElementById('proxxiedDecklist').value : '(not a Proxxied order)',
+    regular_cards:   r > 0 ? state.regularCards.join('\n') : '(none)',
     regular_count:   r,
     regular_billed:  rBilled,
-    holo_cards:      h > 0 ? state.holoCards.join(', ') : '(none)',
+    holo_cards:      h > 0 ? state.holoCards.join('\n') : '(none)',
     holo_count:      h,
     holo_billed:     hBilled,
     order_total:     '$' + grand,
@@ -1125,16 +1105,15 @@ function previewProxxiedParse() {
 }
 
 function resetOrder() {
-  state = { step: 1, source: null, customFiles: [], regularCards: [], holoCards: [] };
+  state = { step: 0, source: null, regularCards: [], holoCards: [] };
   document.querySelectorAll('.source-card').forEach(c => c.classList.remove('selected'));
   ['proxxied','cardsmith','custom'].forEach(s => document.getElementById('src-'+s).style.display='none');
   document.getElementById('proxxiedDecklist').value = '';
   document.getElementById('proxxiedPreview').style.display = 'none';
-  document.getElementById('fileList').innerHTML = '';
+  document.getElementById('customDriveLink').value = '';
   document.getElementById('custName').value = '';
   document.getElementById('custContact').value = '';
   document.getElementById('custNotes').value = '';
-  document.getElementById('proxxiedLink').value = '';
   document.getElementById('cardsmithLink').value = '';
   renderPiles();
   goTo(1);
